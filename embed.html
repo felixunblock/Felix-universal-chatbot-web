@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Chat</title>
+<style>
+  :root { --accent: #5B8DEF; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #111318; color: #E6E8EE; display: flex; flex-direction: column;
+  }
+  header {
+    padding: 12px 16px; background: var(--accent); color: #fff;
+    font-weight: 600; font-size: 15px; flex: none;
+  }
+  #log { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 85%; padding: 9px 12px; border-radius: 14px; white-space: pre-wrap; word-wrap: break-word; }
+  .user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+  .bot { align-self: flex-start; background: #1D2027; border-bottom-left-radius: 4px; }
+  .src { align-self: flex-start; font-size: 11px; color: #8B90A0; margin-top: -4px; padding: 0 4px; }
+  .err { align-self: flex-start; background: #3A1D22; color: #F1B0B7; }
+  .typing { align-self: flex-start; color: #8B90A0; font-size: 13px; padding: 4px 8px; }
+  form { flex: none; display: flex; gap: 8px; padding: 12px; background: #191C22; }
+  input {
+    flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid #2A2E37;
+    background: #111318; color: #E6E8EE; font: inherit; outline: none;
+  }
+  input:focus { border-color: var(--accent); }
+  button {
+    padding: 10px 16px; border: 0; border-radius: 10px; background: var(--accent);
+    color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+</style>
+</head>
+<body>
+<header id="hd">Assistant</header>
+<div id="log"></div>
+<form id="f"><input id="q" autocomplete="off" placeholder="Ask a question…"><button id="s">➤</button></form>
+<script>
+(function () {
+  var P = new URLSearchParams(location.search);
+  var KEY = P.get("key") || "";
+  var NAME = P.get("name") || "Assistant";
+  var ACCENT = P.get("accent") || "";
+  if (/^#[0-9a-fA-F]{6}$/.test(ACCENT)) document.documentElement.style.setProperty("--accent", ACCENT);
+  document.getElementById("hd").textContent = NAME;
+  document.title = NAME;
+  if ((navigator.language || "").slice(0, 2) === "es") {
+    document.getElementById("q").placeholder = "Haz una pregunta…";
+  }
+
+  // Public endpoint + anon key (safe to embed; access control is server-side).
+  var URL_ = "https://mskwfvqpmpfunklbbnkd.supabase.co/functions/v1/chat-widget";
+  var ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1za3dmdnFwbXBmdW5rbGJibmtkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTM3NjksImV4cCI6MjA5ODc4OTc2OX0.FORKvvoq-rUC18-HmZu1S6MbjlaY_bjE6mDAHV4UOv4";
+
+  var log = document.getElementById("log");
+  var form = document.getElementById("f");
+  var input = document.getElementById("q");
+  var send = document.getElementById("s");
+  var history = [];
+
+  function add(cls, text) {
+    var d = document.createElement("div");
+    d.className = "msg " + cls;
+    d.textContent = text;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+    return d;
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var q = input.value.trim();
+    if (!q || send.disabled) return;
+    add("user", q);
+    history.push({ role: "user", content: q });
+    input.value = "";
+    send.disabled = true;
+    var t = document.createElement("div");
+    t.className = "typing";
+    t.textContent = "…";
+    log.appendChild(t);
+    log.scrollTop = log.scrollHeight;
+
+    fetch(URL_, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": ANON,
+        "Authorization": "Bearer " + ANON,
+      },
+      body: JSON.stringify({ widget_key: KEY, message: q, history: history.slice(0, -1) }),
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      t.remove();
+      if (d.answer) {
+        add("bot", d.answer);
+        history.push({ role: "assistant", content: d.answer });
+        if (d.sources && d.sources.length) add("src", "📄 " + d.sources.join(" · "));
+      } else {
+        add("err", d.error || "Something went wrong. / Algo salió mal.");
+      }
+    }).catch(function () {
+      t.remove();
+      add("err", "Connection error. / Error de conexión.");
+    }).finally(function () {
+      send.disabled = false;
+      input.focus();
+    });
+  });
+  input.focus();
+})();
+</script>
+</body>
+</html>
